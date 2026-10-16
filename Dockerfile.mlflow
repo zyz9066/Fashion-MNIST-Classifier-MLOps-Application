@@ -1,0 +1,36 @@
+## Base image with minimal Python installation (v3.11 slim version).
+## Ensures a lightweight and fast image for the container.
+FROM python:3.11-slim
+
+LABEL description="Standalone MLflow tracking server for the MLOps demo" \
+      version="0.1.0"
+### Labels help provide metadata for the image like purpose and version.
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Disables .pyc files creation for code efficiency.
+    # Unbuffered output ensures real-time logs.
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MLFLOW_PORT=5000 \
+    MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db \
+    MLFLOW_ARTIFACTS_DESTINATION=/mlflow/artifacts
+
+WORKDIR /mlflow
+### Sets the working directory to /mlflow within the container to store artifacts/logs.
+
+RUN pip install --no-cache-dir mlflow==2.16.2 sqlalchemy==2.0.54
+### Installs specific versions of MLflow (2.16.2) and its dependency SQLAlchemy.
+
+RUN mkdir -p /mlflow/artifacts
+### Creates the artifacts storage directory required by MLflow.
+
+EXPOSE 5000
+### Exposes port 5000 of the container for outside communication (e.g., MLflow UI).
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/')" || exit 1
+### A health check ensures the service is running by checking localhost:5000.
+
+CMD ["sh", "-c", "mlflow server --host 0.0.0.0 --port ${MLFLOW_PORT} --backend-store-uri ${MLFLOW_BACKEND_STORE_URI} --artifacts-destination ${MLFLOW_ARTIFACTS_DESTINATION} --serve-artifacts"]
+### Starts the MLflow server allowing artifact storage, backend configuration, and real-time tracking.
