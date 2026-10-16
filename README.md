@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-# Fashion-MNIST-Classifier-MLOps-Application
-An end-to-end MLOps application that trains a LeNet-5-style model on Fashion-MNIST, tracks experiments in MLflow, stores the trained model in MinIO, and serves single-image predictions through a FastAPI backend with a Streamlit user interface. Use Docker Compose to run the system’s services.
-=======
 # Fashion-MNIST MLOps Classifier
 
 End-to-end training and serving for Fashion-MNIST: a LeNet-5-style PyTorch CNN, MLflow experiment tracking, versioned model storage in MinIO, a training-complete webhook, a FastAPI inference API, and a Streamlit upload UI.
@@ -136,4 +132,3 @@ The tests cover preprocessing shape/range, invalid image rejection, API health a
 - Webhook payload: `docker compose logs webhook-receiver`
 - Service state: `docker compose ps`
 - Validate Compose syntax: `docker compose config`
->>>>>>> 68f3065 (Initial commit)
