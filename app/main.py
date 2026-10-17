@@ -1,7 +1,5 @@
 """FastAPI inference service; training runs separately in scripts/train_model.py."""
 
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 from tempfile import TemporaryDirectory

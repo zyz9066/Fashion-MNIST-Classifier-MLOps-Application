@@ -1,7 +1,5 @@
 """LeNet-5-style model and shared image preprocessing."""
 
-from __future__ import annotations
-
 from io import BytesIO
 
 import numpy as np
@@ -21,15 +19,17 @@ class FashionMNISTNet(nn.Module):
 
     def __init__(self) -> None:
         super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(1, 6, kernel_size=5),
+        self._features = nn.Sequential(
+            nn.Conv2d(1, 6, 5),
+            nn.BatchNorm2d(6),
             nn.ReLU(),
-            nn.AvgPool2d(kernel_size=2, stride=2),
-            nn.Conv2d(6, 16, kernel_size=5),
+            nn.MaxPool2d(2, stride=2),
+            nn.Conv2d(6, 16, 5),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
-            nn.AvgPool2d(kernel_size=2, stride=2),
+            nn.MaxPool2d(2, stride=2),
         )
-        self.classifier = nn.Sequential(
+        self._classifier = nn.Sequential(
             nn.Flatten(),
             nn.Linear(16 * 4 * 4, 120),
             nn.ReLU(),
@@ -39,7 +39,7 @@ class FashionMNISTNet(nn.Module):
         )
 
     def forward(self, images: torch.Tensor) -> torch.Tensor:
-        return self.classifier(self.features(images))
+        return self._classifier(self._features(images))
 
 
 def preprocess_image(image_bytes: bytes) -> torch.Tensor:

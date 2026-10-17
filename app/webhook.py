@@ -1,7 +1,5 @@
 """Strict HTTP delivery for training-complete notifications."""
 
-from __future__ import annotations
-
 import requests
 
 

@@ -1,7 +1,5 @@
 """Train, track, store, then notify for a Fashion-MNIST model."""
 
-from __future__ import annotations
-
 import argparse
 import json
 import logging
