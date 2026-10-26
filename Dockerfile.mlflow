@@ -3,7 +3,7 @@
 FROM python:3.11-slim
 
 LABEL description="Standalone MLflow tracking server for the MLOps demo" \
-      version="0.1.0"
+    version="0.1.0"
 ### Labels help provide metadata for the image like purpose and version.
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -12,6 +12,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     # Unbuffered output ensures real-time logs.
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10 \
     MLFLOW_PORT=5000 \
     MLFLOW_BACKEND_STORE_URI=sqlite:////mlflow/mlflow.db \
     MLFLOW_ARTIFACTS_DESTINATION=/mlflow/artifacts

@@ -32,6 +32,10 @@ Start the complete stack from the repository root:
 docker compose up --build
 ```
 
+MinIO and its `mc` client are built locally from separate, pinned official source releases using `Dockerfile.minio`, rather than pulling unavailable MinIO container images. The first build needs Internet access to GitHub, the Go module proxy, Docker Hub (Go and Alpine base images), and Alpine package mirrors, and can take several minutes. Go is only used inside Docker; no host Go installation is required. Later builds reuse Docker's cache. These historical MinIO releases preserve the assignment's setup and are not a recommendation for production deployment.
+
+The application image installs CPU-only PyTorch and torchvision from the official PyTorch CPU index before installing the remaining requirements. This avoids large CUDA dependencies; GPU acceleration is not enabled in this Docker setup.
+
 Compose starts MinIO and MLflow, creates the model bucket, runs the one-shot training service, then starts FastAPI and Streamlit only after training succeeds. The first training run downloads Fashion-MNIST and may take several minutes. Keep the Compose logs open to see epoch metrics and the webhook payload.
 
 Open:
@@ -48,15 +52,15 @@ Stop services with `Ctrl+C`, or run `docker compose down`. Named volumes preserv
 
 Edit `configs/training.toml` before starting a new run. No source edits are needed to change the supported settings:
 
-| Setting | Purpose |
-| --- | --- |
-| `epochs`, `batch_size`, `learning_rate` | Main training schedule |
-| `optimizer` | `Adam` or `SGD` |
-| `loss_function` | `CrossEntropyLoss` |
-| `random_seed` | Python, NumPy, PyTorch, and split seed |
-| `validation_split` | Fraction of the training set reserved for validation |
-| `momentum`, `weight_decay` | SGD momentum and optimizer regularization |
-| `num_workers`, `data_dir` | DataLoader processes and dataset location |
+| Setting                                 | Purpose                                              |
+| --------------------------------------- | ---------------------------------------------------- |
+| `epochs`, `batch_size`, `learning_rate` | Main training schedule                               |
+| `optimizer`                             | `Adam` or `SGD`                                      |
+| `loss_function`                         | `CrossEntropyLoss`                                   |
+| `random_seed`                           | Python, NumPy, PyTorch, and split seed               |
+| `validation_split`                      | Fraction of the training set reserved for validation |
+| `momentum`, `weight_decay`              | SGD momentum and optimizer regularization            |
+| `num_workers`, `data_dir`               | DataLoader processes and dataset location            |
 
 Each run records all settings, model/dataset metadata, per-epoch training and validation loss, per-epoch validation accuracy, the final validation accuracy, a JSON summary, and model artifacts in MLflow. Supported optimizers and loss are deliberately validated to avoid recording a configuration that the trainer cannot execute.
 
@@ -89,12 +93,12 @@ After MLflow logging and MinIO upload both succeed, training POSTs this payload 
 
 ```json
 {
-  "status": "success",
-  "event": "training_completed",
-  "mlflow_run_id": "<run-id>",
-  "model_bucket": "fashion-minst-bucket",
-  "model_object_key": "model/<run-id>/model.pt",
-  "validation_accuracy": 0.88
+    "status": "success",
+    "event": "training_completed",
+    "mlflow_run_id": "<run-id>",
+    "model_bucket": "fashion-minst-bucket",
+    "model_object_key": "model/<run-id>/model.pt",
+    "validation_accuracy": 0.88
 }
 ```
 

@@ -1,6 +1,9 @@
 services:
   minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+      target: minio
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
@@ -12,14 +15,18 @@ services:
       - minio-data:/data
 
   minio-init:
-    image: minio/mc:RELEASE.2024-10-13T13-34-11Z
+    build:
+      context: .
+      dockerfile: Dockerfile.minio
+      target: mc
     depends_on:
       - minio
     entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}";
-      do sleep 2; done;
-      mc mb --ignore-existing local/$${MODEL_BUCKET}
+    command:
+      - >-
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}";
+        do sleep 2; done;
+        mc mb --ignore-existing "local/$${MODEL_BUCKET}"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set MINIO_ROOT_USER in .env}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set MINIO_ROOT_PASSWORD in .env}
@@ -53,6 +60,12 @@ services:
     command: ["python", "scripts/webhook_receiver.py"]
     ports:
       - "5001:5001"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 5001), timeout=5).close()"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     restart: unless-stopped
 
   train-model:
@@ -78,7 +91,9 @@ services:
       mlflow:
         condition: service_healthy
       webhook-receiver:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      disable: true
     restart: "no"
 
   ml-api:
@@ -117,6 +132,12 @@ services:
     depends_on:
       ml-api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health', timeout=5)"]
+      interval: 15s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     restart: unless-stopped
 
 volumes:

@@ -1,10 +1,10 @@
 
 # The Dockerfile usually describes steps such as:
-        # Select a Python base image
-        # Install dependencies
-        # Copy the application code
-        # Expose a port
-        # Start the FastAPI server
+# Select a Python base image
+# Install dependencies
+# Copy the application code
+# Expose a port
+# Start the FastAPI server
 
 
 
@@ -18,21 +18,21 @@
 # Base image: official Python 3.11 slim (Debian-based, smaller than full).
 # docker pull python:3.11-slim
 # The library namespace is implicit for Docker Official Images, so these are equivalent:
-    # docker pull python:3.11-slim
-    # docker pull docker.io/library/python:3.11-slim
+# docker pull python:3.11-slim
+# docker pull docker.io/library/python:3.11-slim
 # Docker interprets the short name as:
-    # docker.io/library/python:3.11-slim
-    # Breaking it down:
-        # Registry:   docker.io
-        # Namespace:  library
-        # Repository: python
-        # Tag:        3.11-slim
+# docker.io/library/python:3.11-slim
+# Breaking it down:
+# Registry:   docker.io
+# Namespace:  library
+# Repository: python
+# Tag:        3.11-slim
 
 FROM python:3.11-slim
 
 # Metadata labels are optional but help identify the image later.
 LABEL description="MLOps demo FastAPI model service (pip)" \
-      version="0.1.0"
+    version="0.1.0"
 
 # Environment variables that affect Python and pip behavior:
 # - PYTHONDONTWRITEBYTECODE=1: do not write .pyc files; keeps the image clean.
@@ -42,7 +42,9 @@ LABEL description="MLOps demo FastAPI model service (pip)" \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10
 
 # Set the working directory inside the container. All subsequent COPY/RUN/CMD
 # commands happen relative to /app.
@@ -69,7 +71,9 @@ RUN apt-get update \
 COPY requirements.txt .
 
 # Install the pinned Python dependencies.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.5.1+cpu torchvision==0.20.1+cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Copy application code, training entry points, UI, and TOML config.
 COPY app/ ./app/
@@ -97,7 +101,7 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 
 
-    # Default command: start uvicorn bound to all interfaces on port 8000.
+# Default command: start uvicorn bound to all interfaces on port 8000.
 # 0.0.0.0 is required inside a container; 127.0.0.1 would not be reachable.
 
 # Uvicorn is the ASGI web server that runs the FastAPI application and handles
