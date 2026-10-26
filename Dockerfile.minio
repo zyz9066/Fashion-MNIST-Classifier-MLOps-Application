@@ -1,0 +1,26 @@
+FROM golang:1.24-alpine AS build-base
+RUN apk add --no-cache git
+WORKDIR /src
+
+FROM build-base AS minio-build
+ARG MINIO_VERSION=RELEASE.2024-10-13T13-34-11Z
+RUN git clone --depth 1 --branch "${MINIO_VERSION}" https://github.com/minio/minio.git .
+RUN CGO_ENABLED=0 go build -mod=readonly -o /out/minio .
+
+FROM build-base AS mc-build
+ARG MC_VERSION=RELEASE.2024-10-08T09-37-26Z
+RUN git clone --depth 1 --branch "${MC_VERSION}" https://github.com/minio/mc.git .
+RUN CGO_ENABLED=0 go build -mod=readonly -o /out/mc .
+
+FROM alpine:3.22 AS runtime
+RUN apk add --no-cache ca-certificates
+
+FROM runtime AS minio
+COPY --from=minio-build /out/minio /usr/local/bin/minio
+EXPOSE 9000 9001
+ENTRYPOINT ["minio"]
+CMD ["server", "/data", "--console-address", ":9001"]
+
+FROM runtime AS mc
+COPY --from=mc-build /out/mc /usr/local/bin/mc
+ENTRYPOINT ["mc"]

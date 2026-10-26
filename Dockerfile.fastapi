@@ -1,0 +1,121 @@
+
+# The Dockerfile usually describes steps such as:
+# Select a Python base image
+# Install dependencies
+# Copy the application code
+# Expose a port
+# Start the FastAPI server
+
+
+
+# Simple pip-based image for the API.
+#
+# This Dockerfile builds a single-stage image: it installs dependencies and
+# copies the application into a Python 3.11 slim container. It is the easiest
+# Dockerfile to read, but the final image is larger than the Poetry variant
+# because it does not use a multi-stage build.
+
+# Base image: official Python 3.11 slim (Debian-based, smaller than full).
+# docker pull python:3.11-slim
+# The library namespace is implicit for Docker Official Images, so these are equivalent:
+# docker pull python:3.11-slim
+# docker pull docker.io/library/python:3.11-slim
+# Docker interprets the short name as:
+# docker.io/library/python:3.11-slim
+# Breaking it down:
+# Registry:   docker.io
+# Namespace:  library
+# Repository: python
+# Tag:        3.11-slim
+
+FROM python:3.11-slim
+
+# Metadata labels are optional but help identify the image later.
+LABEL description="MLOps demo FastAPI model service (pip)" \
+    version="0.1.0"
+
+# Environment variables that affect Python and pip behavior:
+# - PYTHONDONTWRITEBYTECODE=1: do not write .pyc files; keeps the image clean.
+# - PYTHONUNBUFFERED=1: send stdout/stderr directly to the container logs.
+# - PIP_NO_CACHE_DIR=1: do not cache downloaded wheels, reducing image size.
+# - PIP_DISABLE_PIP_VERSION_CHECK=1: speeds up pip by skipping update checks.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=120 \
+    PIP_RETRIES=10
+
+# Set the working directory inside the container. All subsequent COPY/RUN/CMD
+# commands happen relative to /app.
+WORKDIR /app
+
+
+# Install Git inside the Docker image because some Python dependencies,
+# packages, or application workflows may need Git to clone or access
+# repositories during the build or at runtime.
+#
+# --no-install-recommends installs only Git and its required dependencies,
+# keeping the Docker image smaller and reducing unnecessary packages.
+#
+# The apt package lists are removed afterward to reduce the final image size
+# because they are only needed while installing the packages.
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy only requirements.txt first. This lets Docker cache the dependency layer
+# separately from the application code, so code changes do not force a full
+# reinstall of packages.
+COPY requirements.txt .
+
+# Install the pinned Python dependencies.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.5.1+cpu torchvision==0.20.1+cpu \
+    && pip install --no-cache-dir -r requirements.txt
+
+# Copy application code, training entry points, UI, and TOML config.
+COPY app/ ./app/
+COPY scripts/ ./scripts/
+COPY configs/ ./configs/
+COPY ui/ ./ui/
+
+# Create a non-root user for security. Running containers as root is risky if
+# the application is compromised, so we add a dedicated user and give it
+# ownership of /app.
+RUN useradd --create-home --shell /bin/bash appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
+# Document that the container listens on port 8000. This does not publish the
+# port by itself; you still need -p 8000:8000 (or docker-compose.yml).
+EXPOSE 8000
+
+# Docker healthcheck: every 30 seconds, call /health inside the container.
+# If the check fails 3 times in a row, Docker marks the container as unhealthy.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+
+
+
+# Default command: start uvicorn bound to all interfaces on port 8000.
+# 0.0.0.0 is required inside a container; 127.0.0.1 would not be reachable.
+
+# Uvicorn is the ASGI web server that runs the FastAPI application and handles
+# incoming HTTP requests asynchronously.
+#
+# --workers can run multiple Uvicorn processes in one container, but each
+# worker may load its own copy of the ML model and therefore consume more RAM.
+#
+# --limit-concurrency can protect the API by limiting the number of requests
+# handled concurrently; requests beyond the limit receive HTTP 503.
+#
+# In Kubernetes, it is often preferable to run one Uvicorn worker per Pod and
+# scale horizontally by increasing the number of Pods (replicas). Kubernetes
+# can then distribute traffic, restart unhealthy Pods, and scale the service.
+
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
