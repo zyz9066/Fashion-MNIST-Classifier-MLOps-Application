@@ -1,0 +1,37 @@
+# Files and directories excluded from the Docker build context.
+#
+# Keeping the build context small speeds up `docker build` and avoids copying
+# secrets or local-only files into the image. Each line is a glob pattern
+# relative to the build context root (the project directory).
+
+# Version control metadata is not needed inside the image.
+.git
+.gitignore
+
+# Environment files may contain secrets; never copy them into an image.
+.env
+
+# Python virtual environments are host-specific and should not be copied.
+.venv/
+venv/
+env/
+
+# Compiled Python cache and bytecode.
+__pycache__/
+*.py[cod]
+
+# Test and coverage artifacts generated during local development.
+.pytest_cache/
+.coverage
+htmlcov/
+mlruns/
+mlartifacts/
+mlflow.db
+data/
+*.pt
+
+# Editor and IDE configuration files.
+.vscode/
+.idea/
+*.swp
+*.swo

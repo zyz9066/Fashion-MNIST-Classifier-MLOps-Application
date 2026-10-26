@@ -1,0 +1,81 @@
+# Multi-stage Poetry build: Poetry is used only to export locked dependencies.
+#
+# This Dockerfile has two stages:
+#   1. builder  - installs Poetry and exports poetry.lock to requirements.txt.
+#   2. runtime  - installs only the exported requirements and the app code.
+# The final image does not contain Poetry, compilers, or cache files, so it is
+# smaller and has a smaller attack surface than the single-stage pip image.
+
+# -------------------- builder stage --------------------
+FROM python:3.11-slim AS builder
+
+# Pin the Poetry version for reproducible builds.
+# POETRY_NO_INTERACTION=1 disables interactive prompts.
+# POETRY_VIRTUALENVS_CREATE=false installs Poetry into the system Python
+# inside the builder; we do not need a virtual environment in a throwaway stage.
+# POETRY_CACHE_DIR points to a temp directory that is discarded with the stage.
+ENV POETRY_VERSION=1.8.3 \
+    POETRY_NO_INTERACTION=1 \
+    POETRY_VIRTUALENVS_CREATE=false \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install Poetry and the export plugin. The plugin is needed for
+# `poetry export -f requirements.txt`.
+RUN pip install --no-cache-dir "poetry==${POETRY_VERSION}" poetry-plugin-export
+
+WORKDIR /app
+
+# Copy the dependency manifest first to maximize Docker layer caching.
+# The repository currently does not commit poetry.lock, so the builder creates
+# a lock file before exporting requirements for the runtime stage.
+COPY pyproject.toml README.md ./
+
+# Resolve dependencies inside the builder, then export the runtime set to a
+# plain requirements.txt file.
+RUN poetry lock \
+    && poetry export --only main -f requirements.txt --output requirements.txt --without-hashes
+
+# -------------------- runtime stage --------------------
+FROM python:3.11-slim AS runtime
+
+# Same Python environment variables as Dockerfile.fastapi.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Copy only the exported requirements.txt from the builder stage. The final
+# image never sees pyproject.toml, poetry.lock, or Poetry itself.
+COPY --from=builder /app/requirements.txt .
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install runtime dependencies from the lock-derived requirements file.
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application, training entry points, UI, and example config.
+COPY app/ ./app/
+COPY scripts/ ./scripts/
+COPY configs/ ./configs/
+COPY ui/ ./ui/
+
+# Run as a non-root user for security.
+RUN useradd --create-home --shell /bin/bash appuser \
+    && mkdir -p /app/data \
+    && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Same healthcheck as Dockerfile.fastapi.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# Start uvicorn bound to all interfaces on port 8000.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
